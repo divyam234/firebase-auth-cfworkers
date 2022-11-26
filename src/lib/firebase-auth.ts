@@ -291,7 +291,10 @@ export class FirebaseAuth {
    * @param idToken An Identity Platform ID token
    * @param customData Public Key Data
    */
-  async verifyIdToken(idToken: string,customData:Record<string, unknown>={}): Promise<DecodedIdToken> {
-    return (await verifyIdToken(idToken,customData)) as any as DecodedIdToken;
+  async verifyIdToken(
+    idToken: string,
+    customData: Record<string, unknown> = {}
+  ): Promise<DecodedIdToken> {
+    return (await verifyIdToken(idToken, customData)) as any as DecodedIdToken;
   }
 }

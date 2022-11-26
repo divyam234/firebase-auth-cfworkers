@@ -50,21 +50,20 @@ export async function getAuthToken(
  * @param idToken An Identity Platform ID token
  * @param customData Public Key Data
  */
-export async function verifyIdToken(idToken: string, customData: Record<string, unknown> = {})
-  : Promise<JWTPayload> {
+export async function verifyIdToken(
+  idToken: string,
+  customData: Record<string, unknown> = {}
+): Promise<JWTPayload> {
   //Fetch public keys
   //TODO: Public keys should be cached until they expire
-  let data = {}
-  if (Object.keys(customData).length > 0)
-    data = customData
-
+  let data = {};
+  if (Object.keys(customData).length > 0) data = customData;
   else {
     const res = await axios.get(
       'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com'
     );
     data = res.data;
   }
-
 
   //Get the correct publicKey from the key id
   const header = decodeProtectedHeader(idToken);
