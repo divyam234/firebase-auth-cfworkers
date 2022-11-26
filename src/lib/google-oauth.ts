@@ -48,14 +48,23 @@ export async function getAuthToken(
  * Verifies an Identity Platform ID token.
  * If the token is valid, the promise is fulfilled with the token's decoded claims; otherwise, the promise is rejected.
  * @param idToken An Identity Platform ID token
+ * @param customData Public Key Data
  */
-export async function verifyIdToken(idToken: string): Promise<JWTPayload> {
+export async function verifyIdToken(idToken: string, customData: Record<string, unknown> = {})
+  : Promise<JWTPayload> {
   //Fetch public keys
   //TODO: Public keys should be cached until they expire
-  const res = await axios(
-    'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com'
-  );
-  const data = res.data;
+  let data = {}
+  if (Object.keys(customData).length > 0)
+    data = customData
+
+  else {
+    const res = await axios.get(
+      'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com'
+    );
+    data = res.data;
+  }
+
 
   //Get the correct publicKey from the key id
   const header = decodeProtectedHeader(idToken);

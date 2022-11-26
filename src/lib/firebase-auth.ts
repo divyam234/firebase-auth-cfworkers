@@ -289,8 +289,9 @@ export class FirebaseAuth {
    * Verifies a Firebase ID token (JWT).
    * If the token is valid, the promise is fulfilled with the token's decoded claims; otherwise, the promise is rejected.
    * @param idToken An Identity Platform ID token
+   * @param customData Public Key Data
    */
-  async verifyIdToken(idToken: string): Promise<DecodedIdToken> {
-    return (await verifyIdToken(idToken)) as any as DecodedIdToken;
+  async verifyIdToken(idToken: string,customData:Record<string, unknown>={}): Promise<DecodedIdToken> {
+    return (await verifyIdToken(idToken,customData)) as any as DecodedIdToken;
   }
 }
