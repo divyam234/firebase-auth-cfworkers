@@ -6,6 +6,7 @@ import {
   jwtVerify,
   SignJWT,
 } from 'jose';
+import axios from 'redaxios';
 
 /**
  * Get an OAuth 2.0 token from google authentication apis using
@@ -30,18 +31,17 @@ export async function getAuthToken(
     .setIssuedAt()
     .sign(ecPrivateKey);
 
-  const response = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Cache-Control': 'no-cache',
-      Host: 'oauth2.googleapis.com',
-    },
-    body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
+  const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+
+  const payload = new URLSearchParams({
+    grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+    assertion: jwt,
   });
 
-  const oauth = await response.json();
-  return oauth.access_token;
+  const res = await axios.post('https://oauth2.googleapis.com/token', payload, {
+    headers,
+  });
+  return res.data.access_token;
 }
 
 /**
@@ -52,10 +52,10 @@ export async function getAuthToken(
 export async function verifyIdToken(idToken: string): Promise<JWTPayload> {
   //Fetch public keys
   //TODO: Public keys should be cached until they expire
-  const res = await fetch(
+  const res = await axios(
     'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com'
   );
-  const data = await res.json();
+  const data = res.data;
 
   //Get the correct publicKey from the key id
   const header = decodeProtectedHeader(idToken);

@@ -1,4 +1,5 @@
 import { decodeProtectedHeader, importX509, jwtVerify } from 'jose';
+import axios from 'redaxios';
 
 import { Cache } from './cache/cache';
 import { getAuthToken, verifyIdToken } from './google-oauth';
@@ -45,27 +46,39 @@ export class FlarebaseAuth {
   }
 
   /**
+   * Cache Result Of Token Response
+   * @returns Returns Cached result
+   */
+
+  async getToken(): Promise<string> {
+    return await this.withCache(
+      () =>
+        getAuthToken(
+          this.config.serviceAccountEmail,
+          this.config.privateKey,
+          'https://www.googleapis.com/auth/identitytoolkit'
+        ),
+      'google-oauth',
+      3600
+    );
+  }
+
+  /**
    * Send a post request to the identity toolkit api
    * @param formData POST form data
    * @param endpoint endpoint of the identity toolkit googleapis
    * @returns HTTP Response
    */
-  private sendFirebaseAuthPostRequest(
+  private async sendFirebaseAuthPostRequest(
     formData: Record<string, string>,
     endpoint: string
-  ): Promise<Response> {
-    const params = {
-      method: 'post',
-      body: JSON.stringify(formData),
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    };
-
+  ): Promise<Record<string, unknown>> {
     const URI =
       this.BASE_URL + `accounts:${endpoint}?key=${this.config.apiKey}`;
 
-    return fetch(URI, params);
+    const res = await axios.post(URI, formData);
+    if (res.status != 200) throw Error(res.data);
+    return res.data;
   }
 
   /**
@@ -73,14 +86,12 @@ export class FlarebaseAuth {
    * @param idToken A valid Firebase ID token
    * @returns User info linked to this ID token
    */
-  public async lookupUser(idToken): Promise<User> {
-    const response = await this.sendFirebaseAuthPostRequest(
+  public async lookupUser(idToken: string): Promise<User> {
+    const data = await this.sendFirebaseAuthPostRequest(
       { idToken: idToken },
       'lookup'
     );
 
-    if (response.status != 200) throw Error(await response.text());
-    const data = (await response.json()) as any;
     return data.users[0] as User;
   }
 
@@ -94,7 +105,7 @@ export class FlarebaseAuth {
     email: string,
     password: string
   ): Promise<{ token: DecodedIdToken; user: User }> {
-    const response = await this.sendFirebaseAuthPostRequest(
+    const data = await this.sendFirebaseAuthPostRequest(
       {
         email: email,
         password: password,
@@ -103,8 +114,7 @@ export class FlarebaseAuth {
       'signInWithPassword'
     );
 
-    if (response.status != 200) throw Error(await response.text());
-    const token = (await response.json()) as DecodedIdToken;
+    const token = data as DecodedIdToken;
     const user = await this.lookupUser(token.idToken);
 
     return { token, user };
@@ -120,7 +130,7 @@ export class FlarebaseAuth {
     idToken: string,
     newPassword: string
   ): Promise<DecodedIdToken> {
-    const response = await this.sendFirebaseAuthPostRequest(
+    const data = await this.sendFirebaseAuthPostRequest(
       {
         idToken: idToken,
         password: newPassword,
@@ -129,8 +139,7 @@ export class FlarebaseAuth {
       'update'
     );
 
-    if (response.status != 200) throw Error(await response.text());
-    const token = (await response.json()) as DecodedIdToken;
+    const token = data as DecodedIdToken;
 
     return token;
   }
@@ -140,14 +149,12 @@ export class FlarebaseAuth {
    * @param idToken	A Firebase Auth ID token for the user.
    */
   async deleteAccount(idToken: string) {
-    const response = await this.sendFirebaseAuthPostRequest(
+    await this.sendFirebaseAuthPostRequest(
       {
         idToken: idToken,
       },
       'delete'
     );
-
-    if (response.status != 200) throw Error(await response.text());
   }
 
   /**
@@ -160,7 +167,7 @@ export class FlarebaseAuth {
     email: string,
     password: string
   ): Promise<{ token: DecodedIdToken; user: User }> {
-    const response = await this.sendFirebaseAuthPostRequest(
+    const data = await this.sendFirebaseAuthPostRequest(
       {
         email: email,
         password: password,
@@ -169,11 +176,56 @@ export class FlarebaseAuth {
       'signUp'
     );
 
-    if (response.status != 200) throw Error(await response.text());
-    const token = (await response.json()) as DecodedIdToken;
+    const token = data as DecodedIdToken;
     const user = await this.lookupUser(token.idToken);
 
     return { token, user };
+  }
+
+  /**
+   * Sets additional developer claims on an existing user identified by the
+   * provided `uid`, typically used to define user roles and levels of
+   * access. These claims should propagate to all devices where the user is
+   * already signed in (after token expiration or when token refresh is forced)
+   * and the next time the user signs in.
+   *
+   * See {@link https://firebase.google.com/docs/auth/admin/custom-claims |
+   * Defining user roles and access levels}
+   * for code samples and detailed documentation.
+   *
+   * @param uid - The `uid` of the user to edit.
+   * @param customUserClaims - The developer claims to set. If null is
+   *   passed, existing custom claims are deleted. Passing a custom claims payload
+   *   larger than 1000 bytes will throw an error. Custom claims are added to the
+   *   user's ID token which is transmitted on every authenticated request.
+   *   For profile non-access related user attributes, use database or other
+   *   separate storage systems.
+   * @returns A promise that resolves when the operation completes
+   *   successfully.
+   */
+  public async setCustomUserClaims(
+    uid: string,
+    customUserClaims: Record<string, unknown> | null
+  ): Promise<Record<string, unknown>> {
+    if (customUserClaims === null) {
+      customUserClaims = {};
+    }
+
+    const token = await this.getToken();
+
+    const payload = {
+      localId: uid,
+      customAttributes: JSON.stringify(customUserClaims),
+    };
+
+    const headers = { Authorization: 'Bearer ' + token };
+
+    const path = `projects/${this.config.projectId}/accounts:update`;
+
+    const res = await axios.post(this.BASE_URL + path, payload, { headers });
+    if (res.status != 200) throw Error(res.data);
+
+    return res.data;
   }
 
   /**
@@ -190,38 +242,19 @@ export class FlarebaseAuth {
   ): Promise<string> {
     //Create the OAuth 2.0 token
     //OAuth token is cached until expiration (1h)
-    const token = await this.withCache(
-      () =>
-        getAuthToken(
-          this.config.serviceAccountEmail,
-          this.config.privateKey,
-          'https://www.googleapis.com/auth/identitytoolkit'
-        ),
-      'google-oauth',
-      3600
-    );
+    const token = await this.getToken();
 
     //Post params and header authorization
-    const params = {
-      method: 'post',
-      body: JSON.stringify({
-        idToken: idToken,
-        validDuration: expiresIn + '',
-      }),
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: 'Bearer ' + token,
-      },
-    };
 
-    //POST request
+    const payload = { idToken: idToken, validDuration: expiresIn + '' };
+    const headers = { Authorization: 'Bearer ' + token };
+
     const path = `projects/${this.config.projectId}:createSessionCookie`;
-    const response = await fetch(this.BASE_URL + path, params);
-    if (response.status != 200) throw Error(await response.text());
+    const res = await axios.post(this.BASE_URL + path, payload, { headers });
+    if (res.status != 200) throw Error(res.data);
 
     //Get session cookie
-    const sessionCookieResponse = await response.json();
-    return sessionCookieResponse.sessionCookie as string;
+    return res.data.sessionCookie as string;
   }
 
   /**
@@ -231,12 +264,12 @@ export class FlarebaseAuth {
    */
   async verifySessionCookie(sessionCookie: string): Promise<DecodedIdToken> {
     //Fetch google public key
-    const res = await fetch(
+    const res = await axios(
       'https://www.googleapis.com/identitytoolkit/v3/relyingparty/publicKeys'
     );
 
     const header = decodeProtectedHeader(sessionCookie);
-    const data = await res.json();
+    const data = res.data;
     if (!data[header.kid]) throw Error('Cannot find public key');
 
     //Get certificate from JWT key id
