@@ -1,6 +1,6 @@
 <h1 align="center">Firebase Auth</h1>
 <p align="center">
- Firebase/Admin Auth Javascript Library for CloudFire Workers
+ Firebase/Admin Auth Javascript Library for Cloudflare Workers
 </p>
 <br>
 
@@ -101,17 +101,17 @@ auth
   .catch((e) => console.log('Invalid session cookie'));
 ```
 
-**Cache OAuth tokens with CloudFire KV**
+**Cache OAuth tokens with CloudflareKv KV**
 
 ```ts
-import { FirebaseAuth, CloudFireKv } from 'firebase-auth-cfworkers';
+import { FirebaseAuth, CloudflareKv } from 'firebase-auth-cfworkers';
 
 const auth = new FirebaseAuth({
   apiKey: 'Firebase api key',
   projectId: 'Firebase project id',
   privateKey: 'Firebase private key or service account private key',
   serviceAccountEmail: 'Firebase service account email',
-  cache: new CloudFireKv(NAMESPACE),
+  cache: new CloudflareKv(NAMESPACE),
 });
 ```
 
