@@ -1,6 +1,6 @@
 {
   "name": "firebase-auth-cfworkers",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Firebase/Admin auth SDK for Cloudflare Workers",
   "main": "build/main/index.js",
   "typings": "build/main/index.d.ts",
