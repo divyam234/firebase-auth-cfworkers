@@ -22,7 +22,7 @@ jobs:
       - name: Run tests
         run: npm test
       - name: Setup github package registry
-        run: 'echo "registry=https://npm.pkg.github.com/@marplex" >> .npmrc'
+        run: 'echo "registry=https://npm.pkg.github.com/divyam234" >> .npmrc'
       - name: Publish
         run: npm publish
         env:
